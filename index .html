@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Textile Laboratory Management System</title>
+<script src="https://unpkg.com/dexie@4.0.8/dist/dexie.min.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:#f4f5f7;color:#222}
+.navbar{position:sticky;top:0;display:flex;overflow-x:auto;background:#0b3d5c;padding:8px;gap:4px;z-index:10}
+.nav-btn{background:#145c85;color:#fff;border:0;padding:10px 14px;border-radius:6px;white-space:nowrap;font-size:14px;cursor:pointer}
+.nav-btn.active{background:#fff;color:#0b3d5c;font-weight:600}
+.content{padding:16px;max-width:1100px;margin:0 auto}
+h1{font-size:22px;margin:0 0 8px}h2{font-size:18px;margin:16px 0 8px}h3{font-size:15px;margin:12px 0 6px}
+label{display:block;font-size:13px;color:#555;margin:8px 0 4px}
+input,select,textarea{width:100%;padding:10px;font-size:15px;border:1px solid #ccc;border-radius:6px;background:#fff;font-family:inherit}
+textarea{min-height:70px;resize:vertical}
+button.primary{background:#0b6e4f;color:#fff;border:0;padding:12px 18px;border-radius:6px;font-size:15px;cursor:pointer}
+button.secondary{background:#e3e7ea;color:#222;border:0;padding:10px 14px;border-radius:6px;font-size:14px;cursor:pointer}
+button.danger{background:#b03030;color:#fff;border:0;padding:8px 12px;border-radius:6px;font-size:13px;cursor:pointer}
+.card{background:#fff;border-radius:8px;padding:12px;margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1;min-width:140px}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.badge{display:inline-block;padding:3px 8px;border-radius:12px;font-size:12px;font-weight:600;background:#e3e7ea;color:#444}
+.badge.OK,.badge.Approved,.badge.Present{background:#d4f5e1;color:#0b6e4f}
+.badge.WARN,.badge.Half-Day,.badge.Pending{background:#fff3cd;color:#8a6d00}
+.badge.FAIL,.badge.Rejected,.badge.Absent{background:#f8d7da;color:#8b1c22}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:8px;text-align:left;border-bottom:1px solid #e3e7ea}th{background:#f4f5f7;font-weight:600}
+.list-item{padding:10px;border-bottom:1px solid #eee;cursor:pointer}
+.list-item:hover{background:#f9fafb}
+.empty{padding:24px;text-align:center;color:#888}
+@media print{.navbar,button{display:none!important}body{background:#fff}.content{padding:0;max-width:100%}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const h=(tag,attrs,...kids)=>{const el=document.createElement(tag);for(const[k,v]of Object.entries(attrs||{})){if(k==='class')el.className=v;else if(k==='html')el.innerHTML=v;else if(k.startsWith('on'))el.addEventListener(k.slice(2).toLowerCase(),v);else if(k==='style'&&typeof v==='object')Object.assign(el.style,v);else if(v!==false&&v!=null)el.setAttribute(k,v);}for(const c of kids.flat(Infinity)){if(c==null||c===false)continue;el.appendChild(typeof c==='object'&&c.nodeType?c:document.createTextNode(String(c)));}return el;};
+const esc=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const db=new Dexie('JanTexLabDB');
+db.version(1).stores({
+  samples:'++id, sampleNo, lotNo, date, status, tester, createdAt',
+  tests:'++id, sampleId, testName',
+  cards:'++id, cardNo, sampleNo, lotNo, date, status, operator, createdAt',
+  trials:'++id, cardId, trialNo',
+  staff:'++id, name, role, active',
+  attendance:'++id, staffId, date, status, [staffId+date]',
+  settings:'key',
+  audit:'++id, timestamp, entity, action',
+  forms:'++id, title',
+  formRecords:'++id, formId, createdAt'
+});
+
+async function setting(k,def){const s=await db.settings.get(k);return s?s.value:def;}
+async function logAudit(entity,entityId,action){await db.audit.add({timestamp:Date.now(),entity,entityId,action});}
+
+(async()=>{
+  if(!(await db.settings.get('lab')))
+    await db.settings.put({key:'lab',value:{name:'LAN TEX',heading:'Laboratory Test Result Summary',logo:''}});
+  if(!(await db.settings.get('defaultTests')))
+    await db.settings.put({key:'defaultTests',value:[
+      'Light Fastness to Perspiration',
+      'Color Fastness to Washing — ISO 105-C03',
+      'Color Fastness to Crocking — AATCC TM-8',
+      'Color Fastness to Perspiration — ISO 105-E04',
+      'Pilling Test — Non-Martindale',
+      'G.S.M.'
+    ]});
+  render();
+})();
+
+function printReport(html){
+  const w=window.open('','_blank');
+  if(!w){alert('Allow popups to print.');return;}
